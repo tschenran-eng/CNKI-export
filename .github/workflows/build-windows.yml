@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "app.py"
+      - "requirements.txt"
       - ".github/workflows/build-windows.yml"
 
 permissions:
@@ -29,13 +30,13 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements.txt
 
       - name: Install build dependencies
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "PySide6-Essentials>=6.8,<7" "playwright>=1.50,<2" "pyinstaller>=6.10,<7"
-          python -m pip install "git+https://github.com/JYao-Chen/cnki-metadata-exporter.git@4bdf8e108c81c4d1a0590377aec1238f534e1a18"
+          python -m pip install -r requirements.txt
 
       - name: Import smoke test
         shell: pwsh
