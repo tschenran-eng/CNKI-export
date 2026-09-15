@@ -1,0 +1,91 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app.py"
+      - ".github/workflows/build-windows.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PySide6-Essentials>=6.8,<7" "playwright>=1.50,<2" "pyinstaller>=6.10,<7"
+          python -m pip install "git+https://github.com/JYao-Chen/cnki-metadata-exporter.git@4bdf8e108c81c4d1a0590377aec1238f534e1a18"
+
+      - name: Import smoke test
+        shell: pwsh
+        run: |
+          python -c "from PySide6.QtWidgets import QApplication; import playwright; import cnki_metadata_exporter.native_export; print('imports ok')"
+          python -m py_compile app.py
+
+      - name: Build single-file EXE
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed `
+            --name CNKI_Metadata_Exporter `
+            --collect-all playwright `
+            --collect-all cnki_metadata_exporter `
+            --hidden-import PySide6.QtCore `
+            --hidden-import PySide6.QtGui `
+            --hidden-import PySide6.QtWidgets `
+            app.py
+
+      - name: Verify EXE exists
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/CNKI_Metadata_Exporter.exe")) { throw "EXE not found" }
+          Get-Item "dist/CNKI_Metadata_Exporter.exe" | Format-List Name,Length,LastWriteTime
+          Get-FileHash "dist/CNKI_Metadata_Exporter.exe" -Algorithm SHA256
+
+      - name: Package portable download
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path portable | Out-Null
+          Copy-Item "dist/CNKI_Metadata_Exporter.exe" "portable/CNKI_Metadata_Exporter.exe"
+          @"
+          CNKI Metadata Exporter
+
+          1. Double-click CNKI_Metadata_Exporter.exe.
+          2. Click the browser button. The app uses installed Microsoft Edge first, Google Chrome second.
+          3. Complete CNKI/CARSI/institution login manually in the visible browser.
+          4. Choose export fields, enter the professional query, and start.
+          5. Completed XLS batches are preserved for resume.
+
+          No Python, Conda, PySide6, or separate Playwright browser installation is required.
+          "@ | Set-Content -Path "portable/README.txt" -Encoding UTF8
+          Compress-Archive -Path portable/* -DestinationPath CNKI_Metadata_Exporter_Windows.zip -Force
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: CNKI-Metadata-Exporter-Windows
+          path: |
+            dist/CNKI_Metadata_Exporter.exe
+            CNKI_Metadata_Exporter_Windows.zip
+          if-no-files-found: error
+          retention-days: 30
