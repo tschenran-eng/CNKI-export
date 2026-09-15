@@ -1,0 +1,4 @@
+PySide6-Essentials>=6.8,<7
+playwright>=1.50,<2
+pyinstaller>=6.10,<7
+git+https://github.com/JYao-Chen/cnki-metadata-exporter.git@4bdf8e108c81c4d1a0590377aec1238f534e1a18
