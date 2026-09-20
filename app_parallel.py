@@ -8,7 +8,7 @@ from typing import Any
 import app_responsive
 
 app = app_responsive.app
-app.APP_VERSION = "0.7.0-qt"
+app.APP_VERSION = "0.7.1-qt"
 
 
 class PrefixedQueue:
@@ -56,9 +56,12 @@ class ParallelBrowserBackend(app.BrowserBackend):
             self.exporters.append(value)
 
     async def _launch_one(self, workspace: Path, worker_no: int):
-        profile = workspace / (
-            ".cnki-profile" if worker_no == 1 else f".cnki-profile-W{worker_no}"
-        )
+        # Never reuse the single-instance profile in concurrent mode.
+        # A Chromium-family browser places a process singleton lock inside its
+        # user-data-dir. Reusing ".cnki-profile" while an older single-instance
+        # browser is still open makes Edge/Chrome exit immediately with
+        # "opened in an existing browser session".
+        profile = workspace / ".cnki-parallel" / f"W{worker_no}"
         exporter = app.RobustNativeExporter(
             workspace,
             profile,
@@ -88,30 +91,24 @@ class ParallelBrowserBackend(app.BrowserBackend):
             self.concurrency = concurrency
             self.emit("status", f"正在启动 {concurrency} 个独立浏览器…")
 
-            results = await asyncio.gather(
-                *[
-                    self._launch_one(workspace, i)
-                    for i in range(1, concurrency + 1)
-                ],
-                return_exceptions=True,
-            )
-
-            errors = []
+            # Start worker browsers one by one. They run concurrently after
+            # startup, but serial startup avoids Chromium/Edge process-singleton
+            # races seen when several persistent contexts are launched at once.
             exporters: list[app.RobustNativeExporter] = []
-            for i, result in enumerate(results, start=1):
-                if isinstance(result, Exception):
-                    errors.append(f"W{i}: {result}")
-                else:
-                    exporters.append(result)
-
-            if errors:
-                for exp in exporters:
-                    try:
-                        await exp.close()
-                    except Exception:
-                        pass
-                self.exporters = []
-                raise RuntimeError("部分并发浏览器启动失败：" + " | ".join(errors))
+            for i in range(1, concurrency + 1):
+                try:
+                    self.emit("status", f"正在启动并发浏览器 W{i}/{concurrency}…")
+                    exp = await self._launch_one(workspace, i)
+                    exporters.append(exp)
+                    await asyncio.sleep(0.8)
+                except Exception as exc:
+                    for opened in exporters:
+                        try:
+                            await opened.close()
+                        except Exception:
+                            pass
+                    self.exporters = []
+                    raise RuntimeError(f"W{i} 启动失败：{exc}") from exc
 
             self.exporters = exporters
             self.browser_ready = True
@@ -125,11 +122,7 @@ class ParallelBrowserBackend(app.BrowserBackend):
                 "并发模式使用相互隔离的浏览器 profile，避免不同任务的知网选择状态互相污染。",
             )
             for i in range(1, concurrency + 1):
-                profile = (
-                    workspace / ".cnki-profile"
-                    if i == 1
-                    else workspace / f".cnki-profile-W{i}"
-                )
+                profile = workspace / ".cnki-parallel" / f"W{i}"
                 self.emit("log", f"W{i} profile：{profile}")
         except Exception as exc:
             self.browser_ready = False
