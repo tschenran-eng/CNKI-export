@@ -7,7 +7,9 @@ on:
     paths:
       - "app.py"
       - "app_responsive.py"
+      - "app_parallel.py"
       - "app_mac.py"
+      - "app_mac_parallel.py"
       - ".github/workflows/build-macos.yml"
 
 permissions:
@@ -52,7 +54,7 @@ jobs:
         run: |
           python -c "import platform; print(platform.platform()); print(platform.machine())"
           python -c "from PySide6.QtWidgets import QApplication; import playwright; import cnki_metadata_exporter.native_export; print('imports ok')"
-          python -m py_compile app.py app_responsive.py app_mac.py
+          python -m py_compile app.py app_responsive.py app_parallel.py app_mac.py app_mac_parallel.py
 
       - name: Build macOS app
         run: |
@@ -62,8 +64,7 @@ jobs:
             --collect-all cnki_metadata_exporter \
             --hidden-import PySide6.QtCore \
             --hidden-import PySide6.QtGui \
-            --hidden-import PySide6.QtWidgets \
-            app_mac.py
+            --hidden-import PySide6.QtWidgets \            app_mac_parallel.py
 
       - name: Verify architecture and app
         run: |
