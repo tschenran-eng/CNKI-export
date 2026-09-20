@@ -6,9 +6,10 @@ on:
     branches: [main]
     paths:
       - "app.py"
-      - "app_tabs.py"
-      - "app_tabs.py"
-      - "app_tabs.py"
+      - "app_workers.py"
+      - "app_workers.py"
+      - "app_workers.py"
+      - "app_workers.py"
       - "requirements.txt"
       - ".github/workflows/build-windows.yml"
 
@@ -45,7 +46,7 @@ jobs:
         shell: pwsh
         run: |
           python -c "from PySide6.QtWidgets import QApplication; import playwright; import cnki_metadata_exporter.native_export; print('imports ok')"
-          python -m py_compile app.py app_responsive.py app_tabs.py app_tabs.py
+          python -m py_compile app.py app_responsive.py app_workers.py
 
       - name: Build single-file EXE
         shell: pwsh
@@ -57,7 +58,7 @@ jobs:
             --hidden-import PySide6.QtCore `
             --hidden-import PySide6.QtGui `
             --hidden-import PySide6.QtWidgets `
-            app_tabs.py
+            app_workers.py
 
       - name: Verify EXE exists
         shell: pwsh
