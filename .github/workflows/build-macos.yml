@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "app.py"
+      - "app_responsive.py"
       - "app_mac.py"
       - ".github/workflows/build-macos.yml"
 
@@ -51,7 +52,7 @@ jobs:
         run: |
           python -c "import platform; print(platform.platform()); print(platform.machine())"
           python -c "from PySide6.QtWidgets import QApplication; import playwright; import cnki_metadata_exporter.native_export; print('imports ok')"
-          python -m py_compile app.py app_mac.py
+          python -m py_compile app.py app_responsive.py app_mac.py
 
       - name: Build macOS app
         run: |
