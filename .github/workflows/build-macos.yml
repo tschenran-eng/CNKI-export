@@ -64,7 +64,8 @@ jobs:
             --collect-all cnki_metadata_exporter \
             --hidden-import PySide6.QtCore \
             --hidden-import PySide6.QtGui \
-            --hidden-import PySide6.QtWidgets \            app_mac_parallel.py
+            --hidden-import PySide6.QtWidgets \
+            app_mac_parallel.py
 
       - name: Verify architecture and app
         run: |
@@ -78,16 +79,16 @@ jobs:
           mkdir -p portable
           cp -R "dist/CNKI_Metadata_Exporter.app" portable/
           cat > portable/README.txt <<'EOF'
-          CNKI Metadata Exporter for macOS
+          CNKI Metadata Exporter for macOS - concurrent build
 
           1. This build is unsigned/not notarized. On first launch, use Finder:
              Control-click CNKI_Metadata_Exporter.app -> Open -> Open.
           2. The app uses an installed Microsoft Edge first, then Google Chrome,
              then Chromium. Safari is not supported as the automation browser.
-          3. Complete CNKI/CARSI/institution login manually in the visible browser.
-          4. Choose export fields, enter the professional query, and start.
-          5. If the result exceeds CNKI's 6000-record visible cap, set the year
-             range and the app will export year shards with independent resume state.
+          3. Set concurrency to 1-4. Each worker uses an independent browser profile.
+          4. Complete CNKI/CARSI/institution login manually in every worker browser.
+          5. Concurrent export is scheduled by year shard. Recommended concurrency: 2.
+          6. Completed XLS batches are independently resumable.
 
           No Python, Conda, PySide6, or separate Playwright browser installation
           is required.
