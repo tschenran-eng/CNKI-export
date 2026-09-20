@@ -1,0 +1,104 @@
+name: Build macOS Apps
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app.py"
+      - "app_mac.py"
+      - ".github/workflows/build-macos.yml"
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"
+  PYTHONIOENCODING: "utf-8"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+            artifact: CNKI-Metadata-Exporter-macOS-Apple-Silicon
+          - runner: macos-15-intel
+            arch: x86_64
+            artifact: CNKI-Metadata-Exporter-macOS-Intel
+
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "PySide6-Essentials>=6.8,<7" "playwright>=1.50,<2" "pyinstaller>=6.10,<7"
+          python -m pip install "git+https://github.com/JYao-Chen/cnki-metadata-exporter.git@4bdf8e108c81c4d1a0590377aec1238f534e1a18"
+
+      - name: Smoke test
+        run: |
+          python -c "import platform; print(platform.platform()); print(platform.machine())"
+          python -c "from PySide6.QtWidgets import QApplication; import playwright; import cnki_metadata_exporter.native_export; print('imports ok')"
+          python -m py_compile app.py app_mac.py
+
+      - name: Build macOS app
+        run: |
+          python -m PyInstaller --noconfirm --clean --windowed \
+            --name CNKI_Metadata_Exporter \
+            --collect-all playwright \
+            --collect-all cnki_metadata_exporter \
+            --hidden-import PySide6.QtCore \
+            --hidden-import PySide6.QtGui \
+            --hidden-import PySide6.QtWidgets \
+            app_mac.py
+
+      - name: Verify architecture and app
+        run: |
+          test -d "dist/CNKI_Metadata_Exporter.app"
+          test -x "dist/CNKI_Metadata_Exporter.app/Contents/MacOS/CNKI_Metadata_Exporter"
+          file "dist/CNKI_Metadata_Exporter.app/Contents/MacOS/CNKI_Metadata_Exporter"
+          shasum -a 256 "dist/CNKI_Metadata_Exporter.app/Contents/MacOS/CNKI_Metadata_Exporter"
+
+      - name: Add README
+        run: |
+          mkdir -p portable
+          cp -R "dist/CNKI_Metadata_Exporter.app" portable/
+          cat > portable/README.txt <<'EOF'
+          CNKI Metadata Exporter for macOS
+
+          1. This build is unsigned/not notarized. On first launch, use Finder:
+             Control-click CNKI_Metadata_Exporter.app -> Open -> Open.
+          2. The app uses an installed Microsoft Edge first, then Google Chrome,
+             then Chromium. Safari is not supported as the automation browser.
+          3. Complete CNKI/CARSI/institution login manually in the visible browser.
+          4. Choose export fields, enter the professional query, and start.
+          5. If the result exceeds CNKI's 6000-record visible cap, set the year
+             range and the app will export year shards with independent resume state.
+
+          No Python, Conda, PySide6, or separate Playwright browser installation
+          is required.
+          EOF
+
+      - name: Package app
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent portable "CNKI_Metadata_Exporter_macOS_${{ matrix.arch }}.zip"
+
+      - name: Upload macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: "CNKI_Metadata_Exporter_macOS_${{ matrix.arch }}.zip"
+          if-no-files-found: error
+          retention-days: 30
