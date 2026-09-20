@@ -20,7 +20,6 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QSpinBox,
-    QSplitter,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -29,7 +28,7 @@ from PySide6.QtWidgets import (
 import app_responsive
 
 app = app_responsive.app
-app.APP_VERSION = "0.8.1-qt-tabs"
+app.APP_VERSION = "0.8.2-qt-tabs"
 
 
 class TabbedExporter(app.RobustNativeExporter):
@@ -624,9 +623,11 @@ class ExtraTaskWidget(QWidget):
         form.addRow("", self.enabled)
 
         self.collection = QLineEdit(data.get("id", f"Q{index}"))
+        self.collection.setFixedHeight(36)
         form.addRow("集合 ID", self.collection)
 
         self.name = QLineEdit(data.get("name", f"Query {index}"))
+        self.name.setFixedHeight(36)
         form.addRow("集合名称", self.name)
 
         years = QHBoxLayout()
@@ -634,10 +635,12 @@ class ExtraTaskWidget(QWidget):
         self.year_from.setRange(0, 2100)
         self.year_from.setSpecialValueText("自动")
         self.year_from.setValue(int(data.get("year_from", 0)))
+        self.year_from.setFixedHeight(36)
         self.year_to = QSpinBox()
         self.year_to.setRange(0, 2100)
         self.year_to.setSpecialValueText("自动")
         self.year_to.setValue(int(data.get("year_to", 0)))
+        self.year_to.setFixedHeight(36)
         years.addWidget(self.year_from)
         years.addWidget(QLabel("至"))
         years.addWidget(self.year_to)
@@ -646,7 +649,7 @@ class ExtraTaskWidget(QWidget):
         layout.addLayout(form)
         layout.addWidget(QLabel("专业检索式"))
         self.query = QPlainTextEdit()
-        self.query.setMinimumHeight(150)
+        self.query.setFixedHeight(180)
         self.query.setPlainText(data.get("query", ""))
         layout.addWidget(self.query)
 
@@ -675,35 +678,19 @@ def _multiquery_window_init(self, *args, **kwargs):
     query_card = self.query.parentWidget()
     qv = query_card.layout()
 
-    # Split the query card into two independently resizable panes:
-    # Task 1 (existing controls) and additional Query instances.
-    # Moving the existing layout items into the upper pane keeps the original
-    # widgets/logic intact while giving the user a real draggable splitter.
-    old_items = []
-    while qv.count():
-        stretch = qv.stretch(0)
-        item = qv.takeAt(0)
-        old_items.append((item, stretch))
-
-    self.primary_query_panel = QWidget()
-    primary_layout = QVBoxLayout(self.primary_query_panel)
-    primary_layout.setContentsMargins(0, 0, 0, 0)
-    primary_layout.setSpacing(12)
-    for item, stretch in old_items:
-        widget = item.widget()
-        child_layout = item.layout()
-        spacer = item.spacerItem()
-        if widget is not None:
-            primary_layout.addWidget(widget, stretch)
-        elif child_layout is not None:
-            primary_layout.addLayout(child_layout, stretch)
-        elif spacer is not None:
-            primary_layout.addItem(spacer)
-
-    self.extra_query_panel = QWidget()
-    extra_layout = QVBoxLayout(self.extra_query_panel)
-    extra_layout.setContentsMargins(0, 4, 0, 0)
-    extra_layout.setSpacing(10)
+    # No nested splitter: the entire application is already inside the
+    # scroll area from app_responsive. Give controls readable heights and let
+    # the page scroll vertically instead of squeezing child containers.
+    self.query.setFixedHeight(190)
+    for control in (
+        self.collection,
+        self.name,
+        self.batch,
+        self.max_batches,
+        self.year_from,
+        self.year_to,
+    ):
+        control.setFixedHeight(36)
 
     bar = QHBoxLayout()
     title = QLabel("附加 Query 实例")
@@ -718,33 +705,24 @@ def _multiquery_window_init(self, *args, **kwargs):
     self.remove_query_btn = QPushButton("－ 删除当前")
     self.remove_query_btn.setProperty("kind", "ghost")
     bar.addWidget(self.remove_query_btn)
-    extra_layout.addLayout(bar)
+
+    qv.addSpacing(10)
+    qv.addLayout(bar)
 
     hint = QLabel(
         "任务 1 使用上面的集合 ID / 名称 / Query；这里可继续添加任务 2–4。"
         "运行时只启动一个 Edge/Chrome，每个 Query 占一个浏览器标签页，共享一次登录。"
-        "中间的拖动条可以自由调整上下两个区域的高度。"
+        "输入区域使用固定的可读高度；需要查看更多内容时直接滚动整个页面。"
     )
     hint.setObjectName("Hint")
     hint.setWordWrap(True)
-    extra_layout.addWidget(hint)
+    qv.addWidget(hint)
 
     self.query_tabs = QTabWidget()
     self.query_tabs.setDocumentMode(True)
-    self.query_tabs.setMinimumHeight(250)
-    extra_layout.addWidget(self.query_tabs, 1)
-
-    self.task_splitter = QSplitter(Qt.Vertical)
-    self.task_splitter.setObjectName("TaskSplitter")
-    self.task_splitter.setChildrenCollapsible(False)
-    self.task_splitter.setHandleWidth(10)
-    self.primary_query_panel.setMinimumHeight(360)
-    self.extra_query_panel.setMinimumHeight(300)
-    self.task_splitter.addWidget(self.primary_query_panel)
-    self.task_splitter.addWidget(self.extra_query_panel)
-    self.task_splitter.setStretchFactor(0, 3)
-    self.task_splitter.setStretchFactor(1, 2)
-    qv.addWidget(self.task_splitter, 1)
+    self.query_tabs.setMinimumHeight(420)
+    self.query_tabs.setMaximumHeight(470)
+    qv.addWidget(self.query_tabs)
 
     self.add_query_btn.clicked.connect(self.add_extra_query)
     self.remove_query_btn.clicked.connect(self.remove_extra_query)
@@ -756,16 +734,6 @@ def _multiquery_window_init(self, *args, **kwargs):
             saved = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         saved = {}
-
-    saved_sizes = saved.get("task_splitter_sizes", [])
-    if (
-        isinstance(saved_sizes, list)
-        and len(saved_sizes) == 2
-        and all(isinstance(x, int) and x > 0 for x in saved_sizes)
-    ):
-        self.task_splitter.setSizes(saved_sizes)
-    else:
-        self.task_splitter.setSizes([620, 420])
 
     extras = saved.get("extra_queries", [])
     if extras:
@@ -788,20 +756,7 @@ def _multiquery_window_init(self, *args, **kwargs):
         "打开浏览器并登录一次；开始后不同 Query 会在同一浏览器中打开不同标签页。"
     )
 
-    # Make the resize handle visible on both light Windows themes and scaled displays.
-    self.setStyleSheet(
-        self.styleSheet()
-        + """
-        QSplitter#TaskSplitter::handle {
-            background: #D7DEE9;
-            border-radius: 4px;
-            margin: 2px 48px;
-        }
-        QSplitter#TaskSplitter::handle:hover {
-            background: #9FB3D8;
-        }
-        """
-    )
+
 
 
 app.MainWindow.__init__ = _multiquery_window_init
@@ -845,8 +800,6 @@ def _save_multiquery_settings(self):
         if p.exists():
             data = json.loads(p.read_text(encoding="utf-8"))
         data["extra_queries"] = [w.data() for w in self.extra_task_widgets]
-        if hasattr(self, "task_splitter"):
-            data["task_splitter_sizes"] = self.task_splitter.sizes()
         p.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
