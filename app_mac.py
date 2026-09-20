@@ -4,7 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-import app
+import app_responsive
+
+app = app_responsive.app
 
 
 async def mac_launch(self) -> None:
